@@ -12,7 +12,7 @@ jobs:
       # 1. Clonar el repositorio del proyecto
       - name: Clonar repositorio
         run: |
-          git clone https://github.com/Practicas-PS/QR_Generator.git .
+          git clone https://github.com/Bismar-nV/HospitalFrontend.git .
 
       # 2. Configurar Node.js
       - name: Configurar Node.js
