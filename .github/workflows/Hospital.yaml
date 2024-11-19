@@ -1,0 +1,82 @@
+name: Deploy en AWS Lightsail para Next.js
+
+on:
+  push:
+    branches: ['main']
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Clonar el repositorio del proyecto
+      - name: Clonar repositorio
+        run: |
+          git clone https://github.com/Practicas-PS/QR_Generator.git .
+
+      # 2. Configurar Node.js
+      - name: Configurar Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18.x'
+
+      # 3. Instalar dependencias
+      - name: Instalar dependencias
+        run: |
+          npm install
+
+      # 4. Construir la aplicación Next.js
+      - name: Construir Next.js
+        run: |
+          npm run build
+
+      # 5. Configurar la conexión SSH
+      - name: Configurar SSH
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      # 6. Agregar el servidor al archivo known_hosts
+      - name: Agregar host a known_hosts
+        run: |
+          ssh-keyscan -v -H $HOST >> ~/.ssh/known_hosts
+        env:
+          HOST: ${{ secrets.REMOTE_HOST }}
+
+      # 7. Instalar Node.js en el servidor remoto (si no está instalado)
+      - name: Instalar Node.js en servidor remoto
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@$HOST << 'EOF'
+          curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+          sudo apt install -y nodejs
+          EOF
+        env:
+          HOST: ${{ secrets.REMOTE_HOST }}
+
+      # 8. Transferir archivos de la aplicación al servidor remoto
+      - name: Transferir archivos al servidor
+        run: |
+          rsync -avz --delete --exclude='.next/cache' ./ ubuntu@$HOST:/home/ubuntu/nextjs-app/
+        env:
+          HOST: ${{ secrets.REMOTE_HOST }}
+
+      # 9. Configurar la aplicación en el servidor
+      - name: Configurar aplicación en servidor
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@$HOST << 'EOF'
+          cd /home/ubuntu/nextjs-app
+          npm install
+          npm run build
+          pm2 delete nextjs-app || true
+          pm2 start npm --name "nextjs-app" -- start
+          pm2 save
+          EOF
+        env:
+          HOST: ${{ secrets.REMOTE_HOST }}
+
+      # 10. Verificar que la aplicación esté corriendo
+      - name: Verificar despliegue
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@$HOST "pm2 list"
+        env:
+          HOST: ${{ secrets.REMOTE_HOST }}
